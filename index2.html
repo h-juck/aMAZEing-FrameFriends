@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Finales Level</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 960px;
+            height: 960px;
+            margin: 0 auto;
+            overflow: hidden;
+            border: 2px solid #fff;
+            background-color: #222;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .player {
+            position: absolute;
+            width: 96px;
+            height: 96px;
+            background-image: url('images/player_idle.gif');
+            background-size: cover;
+            z-index: 2;
+        }
+
+        .player.up {
+            background-image: url('images/player_up.gif');
+        }
+
+        .player.down {
+            background-image: url('images/player_down.gif');
+        }
+
+        .player.left {
+            background-image: url('images/player_left.gif');
+        }
+
+        .player.right {
+            background-image: url('images/player_right.gif');
+        }
+
+        .kiosk {
+            position: absolute;
+            width: 192px; /* 2x tileSize */
+            height: 192px; /* 2x tileSize */
+            z-index: 1;
+        }
+
+        #splashScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 960px;
+            height: 960px;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        #splashScreen img {
+            width: 800px; /* Anpassen nach Bedarf */
+            height: auto;
+        }
+
+        /* Punktzahl-Anzeige */
+        #scoreDisplay {
+            position: absolute;
+            top: 672px; /* Positioniert in der 8. Zeile von oben */
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center; /* Zentriert den Inhalt horizontal */
+            align-items: center; /* Zentriert den Inhalt vertikal */
+            z-index: 5; /* Über anderen Elementen */
+        }
+
+        #scoreDigits {
+            display: flex;
+            align-items: center;
+        }
+
+        #scoreDigits img {
+            width: 48px; /* Halbe Zellbreite */
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="960" height="960"></canvas>
+        <div id="player" class="player idle"></div>
+        <!-- Kiosk wird per JavaScript hinzugefügt -->
+        <!-- Splashscreen für ende01.gif -->
+        <div id="splashScreen" style="display: none;">
+            <img src="images/ende01.gif" alt="Ende" />
+        </div>
+        <!-- Punktzahl-Anzeige -->
+        <div id="scoreDisplay">
+            <div id="scoreDigits"></div>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const gameContainer = document.getElementById('gameContainer');
+        const playerElement = document.getElementById('player');
+        const splashScreen = document.getElementById('splashScreen');
+        const scoreDigitsElement = document.getElementById('scoreDigits');
+
+        const tileSize = 96; // Kachelgröße (96x96 Pixel)
+
+        let keysPressed = {};
+        let rocks = [];
+        let kiosk = null;
+
+        // Punktzahl aus localStorage abrufen
+        let score = parseInt(localStorage.getItem('score')) || 0; // Punktzahl aus localStorage
+
+        // Spielerobjekt
+        const player = {
+            x: 0,
+            y: 0,
+            width: tileSize,
+            height: tileSize,
+            velocityX: 0,
+            velocityY: 0,
+            direction: "idle",
+            previousDirection: "idle"
+        };
+
+        // Bild für Rocks
+        const rockImage = new Image();
+        rockImage.src = "images/rocks.png"; // Pfad zum Rock-Bild
+
+        // Initialisiert Rocks am Rand
+        function initRocks() {
+            rocks = [];
+
+            // Obere und untere Reihe
+            for (let x = 0; x < 10; x++) {
+                rocks.push({ x: x * tileSize, y: 0 });
+                rocks.push({ x: x * tileSize, y: tileSize * 9 });
+            }
+
+            // Linke und rechte Spalte (ohne Ecken, da bereits hinzugefügt)
+            for (let y = 1; y < 9; y++) {
+                rocks.push({ x: 0, y: y * tileSize });
+                rocks.push({ x: tileSize * 9, y: y * tileSize });
+            }
+        }
+
+        // Platziert `kiosk.gif` in der Mitte
+        function initKiosk() {
+            const kioskElement = document.createElement('img');
+            kioskElement.src = 'images/kiosk.gif';
+            kioskElement.classList.add('kiosk');
+            gameContainer.appendChild(kioskElement);
+
+            const kioskX = (canvas.width / 2) - tileSize;
+            const kioskY = (canvas.height / 2) - tileSize;
+
+            kioskElement.style.left = `${kioskX}px`;
+            kioskElement.style.top = `${kioskY}px`;
+
+            kiosk = {
+                x: kioskX,
+                y: kioskY,
+                width: tileSize * 2,
+                height: tileSize * 2,
+                element: kioskElement
+            };
+        }
+
+        // Spielerbewegung verarbeiten
+        function handleMovement() {
+            player.velocityX = 0;
+            player.velocityY = 0;
+
+            if (keysPressed['ArrowUp'] || keysPressed['w']) {
+                player.velocityY = -8;
+                player.direction = 'up';
+            } else if (keysPressed['ArrowDown'] || keysPressed['s']) {
+                player.velocityY = 8;
+                player.direction = 'down';
+            } else if (keysPressed['ArrowLeft'] || keysPressed['a']) {
+                player.velocityX = -8;
+                player.direction = 'left';
+            } else if (keysPressed['ArrowRight'] || keysPressed['d']) {
+                player.velocityX = 8;
+                player.direction = 'right';
+            } else {
+                player.direction = 'idle';
+            }
+
+            // Aktualisiere die Spielerklasse für die Animation
+            if (player.direction !== player.previousDirection) {
+                playerElement.classList.remove(player.previousDirection);
+                playerElement.classList.add(player.direction);
+                player.previousDirection = player.direction;
+            }
+        }
+
+        // Aktualisiert die Position des Spielers und prüft Kollisionen
+        function updatePlayerPosition() {
+            const nextX = player.x + player.velocityX;
+            const nextY = player.y + player.velocityY;
+
+            // Kollision mit Spielfeldgrenzen verhindern
+            if (nextX < 0 || nextX + player.width > canvas.width ||
+                nextY < 0 || nextY + player.height > canvas.height) {
+                return;
+            }
+
+            // Kollision mit Rocks verhindern
+            let collidesWithRock = rocks.some(rock => {
+                return checkCollision(nextX, nextY, rock.x, rock.y, tileSize, tileSize);
+            });
+
+            if (collidesWithRock) {
+                return;
+            }
+
+            player.x = nextX;
+            player.y = nextY;
+            playerElement.style.left = `${player.x}px`;
+            playerElement.style.top = `${player.y}px`;
+
+            // Prüfe Kollision mit dem Kiosk
+            if (checkCollision(player.x, player.y, kiosk.x, kiosk.y, kiosk.width, kiosk.height)) {
+                // Zeige Ende-Splashscreen und leite weiter
+                showEndScreen();
+            }
+        }
+
+        // Kollisionserkennung
+        function checkCollision(x1, y1, x2, y2, width2, height2) {
+            width2 = width2 || tileSize;
+            height2 = height2 || tileSize;
+            return x1 < x2 + width2 &&
+                   x1 + player.width > x2 &&
+                   y1 < y2 + height2 &&
+                   y1 + player.height > y2;
+        }
+
+        // Zeichnet die Rocks
+        function drawRocks() {
+            rocks.forEach(rock => {
+                ctx.drawImage(rockImage, rock.x, rock.y, tileSize, tileSize);
+            });
+        }
+
+        // Zeichnet das Spiel
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawRocks();
+        }
+
+        // Zeigt den End-Splashscreen und leitet weiter
+        function showEndScreen() {
+            // Blende Splashscreen ein
+            splashScreen.style.display = 'flex';
+
+            // Nach 4 Sekunden zu index3.html weiterleiten
+            setTimeout(() => {
+                // Speichern der Punktzahl für index3.html
+                localStorage.setItem('score', score);
+                window.location.href = 'index3.html';
+            }, 4000);
+        }
+
+        // Funktion zum Aktualisieren der Punktzahlanzeige mit Zahlen-GIFs
+        function updateScoreDisplay() {
+            if (!scoreDigitsElement) {
+                console.error("Das Element 'scoreDigits' wurde nicht gefunden.");
+                return;
+            }
+
+            console.log(`Aktuelle Punktzahl: ${score}`);
+
+            const scoreString = score.toString();
+
+            // Leere vorherige Ziffern
+            scoreDigitsElement.innerHTML = '';
+
+            // Wenn die Punktzahl negativ ist, füge das Minus-GIF hinzu
+            if (score < 0) {
+                const minusImg = document.createElement('img');
+                minusImg.src = 'images/minus.gif'; // Stellen Sie sicher, dass 'minus.gif' vorhanden ist
+                minusImg.alt = '-';
+                minusImg.width = 48; // Halbe Zellbreite
+                scoreDigitsElement.appendChild(minusImg);
+                console.log("Minus-GIF hinzugefügt.");
+            }
+
+            // Absoluter Wert der Punktzahl für die Ziffern
+            const absoluteScore = Math.abs(score).toString();
+
+            // Erstelle ein <img> für jede Ziffer
+            for (let i = 0; i < absoluteScore.length; i++) {
+                const digit = absoluteScore[i];
+                const img = document.createElement('img');
+                img.src = `images/${digit}.gif`; // Verwende die entsprechenden GIFs (0.gif bis 9.gif)
+                img.alt = digit;
+                img.width = 48; // Halbe Zellbreite
+                scoreDigitsElement.appendChild(img);
+                console.log(`Digit-GIF hinzugefügt: ${digit}`);
+            }
+        }
+
+        // Spieler-Startposition festlegen
+        function setPlayerStartPosition() {
+            // Setze den Spieler an eine Startposition (z.B. oben links)
+            player.x = tileSize;
+            player.y = tileSize;
+            playerElement.style.left = `${player.x}px`;
+            playerElement.style.top = `${player.y}px`;
+        }
+
+        // Hauptspiel-Schleife
+        function gameLoop() {
+            handleMovement();
+            updatePlayerPosition();
+            drawGame();
+            // updateScoreDisplay(); // Entfernt aus der gameLoop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event Listener für Tastendrücke
+        document.addEventListener('keydown', (e) => {
+            keysPressed[e.key] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keysPressed[e.key] = false;
+        });
+
+        // Initialisiert das Spiel
+        function startGame() {
+            initRocks();
+            initKiosk();
+
+            // Setze den Spieler an eine Startposition (z.B. oben links)
+            setPlayerStartPosition();
+
+            updateScoreDisplay(); // Punktanzeige beim Start aktualisieren
+            gameLoop();
+        }
+
+        window.onload = startGame;
+    </script>
+</body>
+</html>

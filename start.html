@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Spiel Startseite</title>
+    <style>
+        /* Entfernt Standardabstände und setzt das Element auf die volle Fenstergröße */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Vollbild-Hintergrund mit dem Titelbild */
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Verhindert Scrollbalken */
+            position: relative;
+            background: #000; /* Fallback-Hintergrundfarbe */
+        }
+
+        /* Titelbild als flexibles Bild, das die Fenstergröße ausfüllt */
+        #titleImage {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Skaliert das Bild, um den gesamten Bereich abzudecken */
+            z-index: 1;
+        }
+
+        /* Optional: Versteckte Hinweistext (entfernt) */
+        /* Keine Anzeige von Hinweistext */
+    </style>
+</head>
+<body>
+    <!-- Titelbild -->
+    <img id="titleImage" src="images/titlescreen.gif" alt="Titelbild">
+
+    <!-- Hintergrundmusik -->
+    <audio id="bgm" src="images/theme.mp3" autoplay loop></audio>
+
+    <script>
+        // Funktion zum Weiterleiten zu index.html
+        function startGame() {
+            window.location.href = 'index.html';
+        }
+
+        // Event-Listener für die Enter-Taste
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                startGame();
+            }
+        });
+
+        // Hinweis zu Autoplay (optional)
+        window.addEventListener('load', function() {
+            const bgm = document.getElementById('bgm');
+            // Prüfen, ob die Audio-Wiedergabe gestartet wurde
+            if (bgm.paused) {
+                // Autoplay wurde blockiert
+                console.log('Autoplay wurde blockiert. Die Musik wird möglicherweise nicht abgespielt.');
+                // Optional: Du könntest eine Benutzeraktion einführen, um die Musik zu starten
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Amazing Frame Friends</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+
+        /* First line container: Level and Score */
+        #firstLine {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            height: 48px; /* Höhe der ersten Zeile */
+            background-color: rgba(0, 0, 0, 0.7); /* Abdunkelter Hintergrund für bessere Lesbarkeit */
+            display: flex;
+            align-items: center;
+            padding: 0 10px; /* Innenabstand, um nicht über die Ränder hinauszugehen */
+            border-radius: 5px;
+            z-index: 5;
+        }
+
+        /* Level Container: Level.gif, Spacer und Level Digits */
+        #levelContainer {
+            display: flex;
+            align-items: center;
+        }
+
+        #levelContainer img.level-label {
+            width: 192px; /* 2 Zellen * 96px */
+            height: auto;
+        }
+
+        /* Spacer to reach the third cell */
+        #levelSpacer {
+            width: 96px; /* 1 Zelle */
+            height: 1px; /* Minimalhöhe */
+        }
+
+        /* Level Digits */
+        #levelDigits {
+            display: flex;
+            align-items: center;
+        }
+
+        #levelDigits img {
+            width: 48px; /* Halbe Zellbreite */
+            height: auto;
+        }
+
+        /* Score display */
+        #scoreDigits {
+            display: flex;
+            align-items: center;
+            margin-left: auto; /* Weit nach rechts schieben */
+        }
+
+        #scoreDigits img {
+            width: 48px; /* Halbe Zellbreite */
+            height: auto;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 960px; /* 10 Kacheln * 96px */
+            height: 960px; /* 10 Kacheln * 96px */
+            margin: 100px auto; /* Zentriert den Container */
+            overflow: hidden; /* Verhindert Scrollen */
+            border: 2px solid #fff;
+            background-color: #222;
+        }
+
+        canvas {
+            display: block;
+            margin: 0;
+            background-color: #000;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1; /* Unter den Palmen */
+        }
+
+        .collectible, .badKeyframe, .palm, .palm2, .player {
+            position: absolute;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .collectible, .badKeyframe, .player {
+            width: 96px; /* tileSize */
+            height: 96px; /* tileSize */
+        }
+
+        .palm, .palm2 {
+            width: 192px; /* 2 * tileSize */
+            height: 192px;
+            z-index: 3;
+        }
+
+        /* CSS-Klassen für die Spieleranimation */
+        .player {
+            background-size: cover;
+            transition: background-image 0.3s ease;
+        }
+
+        .player.idle {
+            background-image: url('images/player_idle.gif');
+        }
+
+        .player.up {
+            background-image: url('images/player_up.gif');
+        }
+
+        .player.down {
+            background-image: url('images/player_down.gif');
+        }
+
+        .player.left {
+            background-image: url('images/player_left.gif');
+        }
+
+        .player.right {
+            background-image: url('images/player_right.gif');
+        }
+
+        .player.dead {
+            background-image: url('images/player_tot.gif'); /* Bild für den toten Spieler */
+        }
+
+        /* Splash screen styles */
+        .splash {
+            position: absolute;
+            width: 768px; /* 8 Zellen * 96px */
+            height: auto; /* Höhe hängt vom GIF ab */
+            left: 50%;
+            top: 50%; /* Zentriert sowohl horizontal als auch vertikal */
+            transform: translate(-50%, -50%);
+            z-index: 6; /* Über allen anderen Elementen */
+            display: none; /* Anfangs unsichtbar */
+            background-color: transparent; /* Transparent, um das Spielfeld sichtbar zu halten */
+        }
+
+        .splash img {
+            width: 768px; /* 8 Zellen breit */
+            height: auto; /* Automatische Höhe basierend auf dem GIF */
+            display: block;
+        }
+
+        /* Styles für die Punktzahl-Ziffern */
+        .score-digits, .level-digits {
+            display: flex;
+            align-items: center;
+        }
+
+        .score-digits img, .level-digits img {
+            width: 48px; /* Halbe Zellbreite */
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- First line: Level and Score -->
+    <div id="firstLine">
+        <!-- Level Container: Level.gif, Spacer, Level Digits -->
+        <div id="levelContainer">
+            <img src="images/level.gif" alt="Level" class="level-label" />
+            <div id="levelSpacer"></div>
+            <div id="levelDigits" class="level-digits"></div>
+        </div>
+        <!-- Score Digits: rechtsbündig -->
+        <div id="scoreDigits" class="score-digits"></div>
+    </div>
+    
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="960" height="960"></canvas>
+        <!-- Spielfigur als <div> Element mit CSS-Klassen für Animation -->
+        <div id="player" class="player idle"></div>
+        <!-- Splash screen -->
+        <div id="splash" class="splash">
+            <img src="images/splash01.gif" alt="Splash Screen" />
+        </div>
+    </div>
+
+    <!-- Audio für Sammelobjekte, Bad-Keyframes und Hintergrundmusik -->
+    <audio id="collectSound" src="audio/sammel.mp3" preload="auto"></audio>
+    <audio id="badSound" src="audio/bad.mp3" preload="auto"></audio>
+    <audio id="bgMusic" src="audio/theme.mp3" preload="auto" loop></audio>
+    
+    <!-- Neue Audiodateien für den Tod des Spielers -->
+    <audio id="deathSound1" src="audio/t1.mp3" preload="auto"></audio>
+    <audio id="deathSound2" src="audio/t2.mp3" preload="auto"></audio>
+    <audio id="deathSound3" src="audio/t3.mp3" preload="auto"></audio>
+    <audio id="deathSound4" src="audio/t4.mp3" preload="auto"></audio>
+    <audio id="deathSound5" src="audio/t5.mp3" preload="auto"></audio>
+    
+    <!-- Neue Audiodateien für Sammelobjekte und Bad-Keyframes -->
+    <audio id="collectSound1" src="audio/g1.mp3" preload="auto"></audio>
+    <audio id="collectSound2" src="audio/g2.mp3" preload="auto"></audio>
+    <audio id="collectSound3" src="audio/g3.mp3" preload="auto"></audio>
+    <audio id="collectSound4" src="audio/g4.mp3" preload="auto"></audio>
+    <audio id="collectSound5" src="audio/g5.mp3" preload="auto"></audio>
+    <audio id="collectSound6" src="audio/g6.mp3" preload="auto"></audio>
+    
+    <audio id="badSound1" src="audio/s1.mp3" preload="auto"></audio>
+    <audio id="badSound2" src="audio/s2.mp3" preload="auto"></audio>
+    <audio id="badSound3" src="audio/s3.mp3" preload="auto"></audio>
+    <audio id="badSound4" src="audio/s4.mp3" preload="auto"></audio>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const gameContainer = document.getElementById('gameContainer');
+        const playerElement = document.getElementById('player'); // Spielfigur als DOM-Element
+        const splashElement = document.getElementById('splash'); // Splash-Element
+        const scoreDigitsElement = document.getElementById('scoreDigits'); // Punktzahl-Ziffern-Element
+        const levelDigitsElement = document.getElementById('levelDigits'); // Level-Ziffern-Element
+
+        const tileSize = 96; // Kachelgröße (96x96 Pixel)
+        const baseSpeed = 8; // Geschwindigkeit
+        let speed = baseSpeed;
+
+        let musicStarted = false; // Flag, um die Musik nur einmal zu starten
+        let isDead = false; // Flag, um den Zustand des Spielers zu verfolgen
+
+        // Bildquellen setzen - Verwendet die neuen .gif-Dateien
+        const playerImages = {
+            up: "images/player_up.gif",
+            left: "images/player_left.gif",
+            right: "images/player_right.gif",
+            down: "images/player_down.gif",
+            idle: "images/player_idle.gif",
+            dead: "images/player_tot.gif" // Bild für den toten Spieler
+        };
+
+        const levelImage = new Image();
+        const rockImage = new Image(); // Bild für Felsen (Rocks)
+        const palmImage = new Image(); // Bild für Palmen
+        const palm2Image = new Image(); // Bild für zusätzliche Palmen
+
+        levelImage.src = "images/level01.png"; // Spielfeld
+        rockImage.src = "images/rocks.png"; // Felsen
+        palmImage.src = "images/palmer.gif"; // Palme
+        palm2Image.src = "images/palmer2.gif"; // Zusätzliche Palme
+
+        // Audio-Elemente
+        const collectSound = document.getElementById("collectSound");
+        const badSound = document.getElementById("badSound");
+        const bgMusic = document.getElementById("bgMusic");
+
+        // Neue Audiodateien für den Tod des Spielers
+        const deathSounds = [
+            document.getElementById("deathSound1"),
+            document.getElementById("deathSound2"),
+            document.getElementById("deathSound3"),
+            document.getElementById("deathSound4"),
+            document.getElementById("deathSound5")
+        ];
+
+        // Neue Audiodateien für Sammelobjekte
+        const collectSounds = [
+            document.getElementById("collectSound1"),
+            document.getElementById("collectSound2"),
+            document.getElementById("collectSound3"),
+            document.getElementById("collectSound4"),
+            document.getElementById("collectSound5"),
+            document.getElementById("collectSound6")
+        ];
+
+        // Neue Audiodateien für Bad-Keyframes
+        const sSounds = [
+            document.getElementById("badSound1"),
+            document.getElementById("badSound2"),
+            document.getElementById("badSound3"),
+            document.getElementById("badSound4")
+        ];
+
+        // Setze die Hintergrundmusik auf halb so laut
+        bgMusic.volume = 0.5;
+
+        // Spielerobjekt
+        const player = {
+            x: 0,
+            y: 0,
+            width: tileSize,
+            height: tileSize,
+            velocityX: 0,
+            velocityY: 0,
+            direction: "idle", // Startet mit der Idle-Animation
+            previousDirection: "idle", // Um Änderungen der Richtung zu verfolgen
+            collectedBadKeyframes: [] // Array zum Verfolgen eingesammelter Bad-Keyframes
+        };
+
+        let keysPressed = {};
+        let collectibles = [];
+        let badKeyframes = [];
+        let rocks = [];
+        let palms = [];
+        let palms2 = []; // Array für zusätzliche Palmen
+        let collisionMatrix = [];
+
+        // Level-Variable
+        let currentLevel = 1;
+
+        // Punkte-Variable
+        let score = 0;
+
+        // Hintergrundmusik-Start
+        function startBackgroundMusic() {
+            if (!musicStarted) {
+                bgMusic.play().catch(error => {
+                    console.error("Hintergrundmusik konnte nicht gestartet werden:", error);
+                });
+                musicStarted = true; // Musik-Start flag
+            }
+        }
+
+        // Level-Anzeige aktualisieren
+        function updateLevelDisplay() {
+            const levelDigits = levelDigitsElement;
+            const levelString = currentLevel.toString();
+
+            // Leere vorherige Ziffern
+            levelDigits.innerHTML = '';
+
+            // Erstelle ein <img> für jede Ziffer
+            for (let i = 0; i < levelString.length; i++) {
+                const digit = levelString[i];
+                const img = document.createElement('img');
+                img.src = `images/${digit}.gif`; // Verwende die entsprechenden GIFs (0.gif bis 9.gif)
+                img.alt = digit;
+                img.width = 48; // Halbe Zellbreite
+                levelDigits.appendChild(img);
+            }
+
+            // Rechtsbündige Ausrichtung ist durch Flexbox in CSS bereits gegeben
+        }
+
+        // Punkte-Anzeige aktualisieren (als Ziffern-GIFs)
+        function updateScoreDisplay() {
+            const scoreDigits = scoreDigitsElement;
+            const scoreString = score.toString();
+
+            // Leere vorherige Ziffern
+            scoreDigits.innerHTML = '';
+
+            // Wenn die Punktzahl negativ ist, füge das Minus-GIF hinzu
+            if (score < 0) {
+                const minusImg = document.createElement('img');
+                minusImg.src = 'images/minus.gif'; // Stelle sicher, dass 'minus.gif' im 'images/'-Verzeichnis liegt
+                minusImg.alt = '-';
+                minusImg.width = 48; // Halbe Zellbreite
+                scoreDigits.appendChild(minusImg);
+            }
+
+            // Absolute Wert der Punktzahl für die Ziffern
+            const absoluteScore = Math.abs(score).toString();
+
+            // Erstelle ein <img> für jede Ziffer
+            for (let i = 0; i < absoluteScore.length; i++) {
+                const digit = absoluteScore[i];
+                const img = document.createElement('img');
+                img.src = `images/${digit}.gif`; // Verwende die entsprechenden GIFs (0.gif bis 9.gif)
+                img.alt = digit;
+                img.width = 48; // Halbe Zellbreite
+                scoreDigits.appendChild(img);
+            }
+
+            // Rechtsbündige Ausrichtung ist durch Flexbox in CSS bereits gegeben
+
+            // Überprüfe, ob die Punktzahl unter 0 ist
+            if (score < 0 && !isDead) {
+                handlePlayerDeath();
+            }
+        }
+
+        // Funktion zum Handhaben des Spielertodes
+        function handlePlayerDeath() {
+            isDead = true; // Setze das Flag auf tot
+
+            // Wechsel die CSS-Klasse auf 'dead', um das Bild zu ändern
+            playerElement.classList.remove(player.previousDirection);
+            playerElement.classList.add('dead');
+
+            // Wähle zufällig eine Todes-Audiodatei aus und spiele sie ab
+            const randomIndex = Math.floor(Math.random() * deathSounds.length);
+            const selectedDeathSound = deathSounds[randomIndex];
+            selectedDeathSound.play().catch(error => {
+                console.error("Todessound konnte nicht abgespielt werden:", error);
+            });
+
+            // Deaktiviere die Bewegung des Spielers
+            // Dies wird durch das Überprüfen von isDead im Bewegungshandler erreicht
+
+            // Nach 2 Sekunden, setze das Spiel zurück
+            setTimeout(() => {
+                resetGame();
+            }, 2000);
+        }
+
+        // Funktion zum Zurücksetzen des Spiels auf Level 1
+        function resetGame() {
+            // Setze die Punktzahl und das Level zurück
+            score = 0;
+            currentLevel = 1;
+            isDead = false;
+
+            // Aktualisiere die Anzeigen
+            updateScoreDisplay();
+            updateLevelDisplay();
+
+            // Setze die Spieleranimation zurück zur Idle-Animation
+            playerElement.classList.remove('dead');
+            playerElement.classList.add('idle');
+
+            // Initialisiere das Spiel neu
+            initRocks();
+            initCollectibles();
+            initPalms();
+            initPalms2(); // Initialisiere die zusätzlichen Palmen
+            initBadKeyframes();
+        }
+
+        // Flood-Fill Algorithmus zum Überprüfen der Erreichbarkeit von Zellen
+        function floodFill(matrix, x, y, visited) {
+            if (x < 1 || x >= 9 || y < 1 || y >= 9) return;
+            if (matrix[y][x] === 1 || visited[y][x]) return;
+
+            visited[y][x] = true;
+
+            // Nachbarzellen überprüfen
+            floodFill(matrix, x + 1, y, visited); // Rechts
+            floodFill(matrix, x - 1, y, visited); // Links
+            floodFill(matrix, x, y + 1, visited); // Unten
+            floodFill(matrix, x, y - 1, visited); // Oben
+        }
+
+        // Überprüfen, ob alle 0-Zellen erreichbar sind
+        function checkAccessibility(matrix) {
+            const visited = Array.from({ length: 10 }, () => Array(10).fill(false));
+
+            // Suche ein freies Feld innerhalb des Spielfelds zum Starten
+            let startX = -1;
+            let startY = -1;
+            for (let y = 1; y < 9; y++) {
+                for (let x = 1; x < 9; x++) {
+                    if (matrix[y][x] === 0) {
+                        startX = x;
+                        startY = y;
+                        break;
+                    }
+                }
+                if (startX !== -1) break;
+            }
+
+            if (startX === -1) return false; // Kein freies Feld gefunden
+
+            floodFill(matrix, startX, startY, visited);
+
+            for (let y = 1; y < 9; y++) {
+                for (let x = 1; x < 9; x++) {
+                    if (matrix[y][x] === 0 && !visited[y][x]) {
+                        return false; // Es gibt eine nicht erreichbare Zelle
+                    }
+                }
+            }
+            return true; // Alle begehbaren Zellen sind erreichbar
+        }
+
+        // Generiere eine 10x10 Matrix mit 0 (begehbar) und 1 (Rock), sicherstellen, dass alle 0-Zellen erreichbar sind
+        function generateMatrix() {
+            let matrix;
+            do {
+                matrix = Array.from({ length: 10 }, () => Array(10).fill(0));
+
+                // Zufällige Befüllung
+                for (let y = 1; y < 9; y++) {
+                    for (let x = 1; x < 9; x++) {
+                        if (Math.random() < 0.3) { // 30% Wahrscheinlichkeit für einen Rock
+                            matrix[y][x] = 1;
+                        }
+                    }
+                }
+
+                // Setze die Ränder auf 1 (Rocks)
+                for (let i = 0; i < 10; i++) {
+                    matrix[0][i] = 1;    // Obere Reihe
+                    matrix[9][i] = 1;    // Untere Reihe
+                    matrix[i][0] = 1;    // Linke Spalte
+                    matrix[i][9] = 1;    // Rechte Spalte
+                }
+
+            } while (!checkAccessibility(matrix)); // Überprüfe, ob alle 0-Zellen erreichbar sind
+
+            return matrix;
+        }
+
+        // Initialisiert Rocks basierend auf der generierten Matrix und platziert den Spieler auf einem freien Feld
+        function initRocks() {
+            collisionMatrix = generateMatrix();
+
+            // Platzierung des Spielers auf einer freien (0) Zelle innerhalb des Spielfelds
+            let playerPlaced = false;
+            for (let y = 1; y < 9 && !playerPlaced; y++) {
+                for (let x = 1; x < 9 && !playerPlaced; x++) {
+                    if (collisionMatrix[y][x] === 0) {
+                        player.x = x * tileSize;
+                        player.y = y * tileSize;
+                        playerPlaced = true;
+                    }
+                }
+            }
+
+            // Setze den Spieler an die Startposition
+            playerElement.style.left = `${player.x}px`;
+            playerElement.style.top = `${player.y}px`;
+
+            // Rock-Bilder basierend auf der Matrix platzieren
+            rocks = []; // Vorherige Rocks entfernen
+            for (let y = 0; y < 10; y++) {
+                for (let x = 0; x < 10; x++) {
+                    if (collisionMatrix[y][x] === 1) {
+                        rocks.push({ x: x * tileSize, y: y * tileSize });
+                    }
+                }
+            }
+        }
+
+        // Initialisiert die Palmen (palmer.gif)
+        function initPalms() {
+            palms.forEach(palm => {
+                if (palm.element.parentElement === gameContainer) {
+                    gameContainer.removeChild(palm.element);
+                }
+            });
+            palms = [];
+
+            let maxTries = 100;
+            let placedPalms = 0;
+
+            while (placedPalms < 5 && maxTries > 0) {
+                maxTries--;
+                // Wähle zufälligen Rock aus
+                let randomRock = rocks[Math.floor(Math.random() * rocks.length)];
+
+                // Überprüfen, ob bereits eine Palme an dieser Position ist
+                let occupied = palms.some(palm => palm.x === randomRock.x && palm.y === randomRock.y) ||
+                               palms2.some(palm2 => palm2.x === randomRock.x && palm2.y === randomRock.y);
+                if (!occupied) {
+                    const palmElement = document.createElement('img');
+
+                    palmElement.src = "images/palmer.gif"; // GIF für Palme
+
+                    palmElement.classList.add('palm');
+                    gameContainer.appendChild(palmElement);
+
+                    // Berechne die Position für die vergrößerte Palme (192x192)
+                    // Positionierung: Die Palme soll über dem Rock zentriert sein und um 48px nach oben verschoben werden
+                    const palmX = randomRock.x + (tileSize / 2) - (192 / 2);
+                    const palmY = randomRock.y + (tileSize / 2) - (192 / 2) - 48; // Verschiebung um 48px nach oben
+
+                    palmElement.style.left = `${palmX}px`;
+                    palmElement.style.top = `${palmY}px`;
+
+                    palms.push({ x: randomRock.x, y: randomRock.y, element: palmElement });
+
+                    placedPalms++;
+                }
+            }
+
+            if (placedPalms < 5) {
+                console.error("Konnte nicht alle Palmen platzieren.");
+            }
+        }
+
+        // Initialisiert die zusätzlichen Palmen (palmer2.gif) ausschließlich auf den Rocks am Rand
+        function initPalms2() {
+            palms2.forEach(palm2 => {
+                if (palm2.element.parentElement === gameContainer) {
+                    gameContainer.removeChild(palm2.element);
+                }
+            });
+            palms2 = [];
+
+            // Filtern der Rocks, die sich am Rand befinden (x=0, x=864, y=0, y=864)
+            const edgeRocks = rocks.filter(rock => 
+                rock.x === 0 || 
+                rock.x === tileSize * 9 || 
+                rock.y === 0 || 
+                rock.y === tileSize * 9
+            );
+
+            if (edgeRocks.length === 0) {
+                console.error("Keine Rocks am Rand gefunden für palmer2.");
+                return;
+            }
+
+            let maxTries = 100;
+            let placedPalms2 = 0;
+            const desiredPalms2 = Math.min(5, edgeRocks.length); // Maximale Anzahl basierend auf verfügbaren Edge-Rocks
+
+            while (placedPalms2 < desiredPalms2 && maxTries > 0) {
+                maxTries--;
+                // Wähle zufälligen Edge-Rock aus
+                let randomRock = edgeRocks[Math.floor(Math.random() * edgeRocks.length)];
+
+                // Überprüfen, ob bereits eine Palme an dieser Position ist
+                let occupied = palms.some(palm => palm.x === randomRock.x && palm.y === randomRock.y) ||
+                               palms2.some(palm2 => palm2.x === randomRock.x && palm2.y === randomRock.y);
+                if (!occupied) {
+                    const palm2Element = document.createElement('img');
+
+                    palm2Element.src = "images/palmer2.gif"; // GIF für zusätzliche Palme
+
+                    palm2Element.classList.add('palm2');
+                    gameContainer.appendChild(palm2Element);
+
+                    // Berechne die Position für die vergrößerte Palme (192x192)
+                    // Da palmer2 am Rand sind, müssen wir die Position je nach Rand anpassen und um 48px nach oben verschieben
+
+                    let palm2X = randomRock.x + (tileSize / 2) - (192 / 2);
+                    let palm2Y = randomRock.y + (tileSize / 2) - (192 / 2) - 48; // Verschiebung um 48px nach oben
+
+                    // Korrekturen für Ränder, um sicherzustellen, dass palmer2 nicht außerhalb des Containers platziert werden
+                    if (randomRock.x === 0) { // Linke Kante
+                        palm2X = randomRock.x;
+                    }
+                    if (randomRock.x === tileSize * 9) { // Rechte Kante
+                        palm2X = randomRock.x - 192 + tileSize;
+                    }
+                    if (randomRock.y === 0) { // Obere Kante
+                        palm2Y = randomRock.y;
+                    }
+                    if (randomRock.y === tileSize * 9) { // Untere Kante
+                        palm2Y = randomRock.y - 192 + tileSize;
+                    }
+
+                    palm2Element.style.left = `${palm2X}px`;
+                    palm2Element.style.top = `${palm2Y}px`;
+
+                    palms2.push({ x: randomRock.x, y: randomRock.y, element: palm2Element });
+
+                    placedPalms2++;
+                }
+            }
+
+            if (placedPalms2 < desiredPalms2) {
+                console.error("Konnte nicht alle zusätzlichen Palmen2 platzieren.");
+            }
+        }
+
+        // Fügt ein Sammelobjekt an einer zufälligen freien Position hinzu
+        function addCollectible() {
+            let x, y;
+            let maxTries = 100;
+            let placed = false;
+
+            do {
+                x = Math.floor(Math.random() * 8) + 1;
+                y = Math.floor(Math.random() * 8) + 1;
+                maxTries--;
+
+                if (collisionMatrix[y][x] === 0) { // Nur auf freien Feldern platzieren
+                    let occupied = collectibles.some(item => item.x === x * tileSize && item.y === y * tileSize) ||
+                                   palms.some(palm => palm.x === x * tileSize && palm.y === y * tileSize) ||
+                                   palms2.some(palm2 => palm2.x === x * tileSize && palm2.y === y * tileSize);
+                    if (!occupied && !(player.x === x * tileSize && player.y === y * tileSize)) {
+                        const collectibleElement = document.createElement('img');
+
+                        collectibleElement.src = "images/sammel_1.gif"; // GIF für Sammelobjekt
+
+                        collectibleElement.classList.add('collectible');
+                        gameContainer.appendChild(collectibleElement);
+
+                        collectibles.push({ x: x * tileSize, y: y * tileSize, element: collectibleElement });
+
+                        placed = true;
+                    }
+                }
+            } while (!placed && maxTries > 0);
+
+            if (!placed) {
+                console.error("Konnte keine freie Position für Sammelobjekt finden.");
+            }
+        }
+
+        // Initialisiert die Sammelobjekte
+        function initCollectibles() {
+            collectibles.forEach(item => {
+                if (item.element.parentElement === gameContainer) {
+                    gameContainer.removeChild(item.element);
+                }
+            });
+            collectibles = [];
+
+            for (let i = 0; i < currentLevel; i++) {
+                addCollectible();
+            }
+        }
+
+        // Fügt Bad-Keyframes hinzu, basierend auf dem aktuellen Level
+        function initBadKeyframes() {
+            if (currentLevel < 3) {
+                return; // Keine Bad-Keyframes für Level < 3
+            }
+
+            const desiredBadKeyframes = currentLevel - 2; // Level 3: 1, Level 4: 2, etc.
+            const currentBadKeyframes = badKeyframes.length;
+
+            const badKeyframesToAdd = desiredBadKeyframes - currentBadKeyframes;
+
+            for (let i = 0; i < badKeyframesToAdd; i++) {
+                spawnBadKeyframe();
+            }
+        }
+
+        // Fügt ein Bad-Keyframe an einer zufälligen freien Position hinzu
+        function spawnBadKeyframe() {
+            let x, y;
+            let maxTries = 100;
+            let placed = false;
+
+            do {
+                x = Math.floor(Math.random() * 8) + 1;
+                y = Math.floor(Math.random() * 8) + 1;
+                maxTries--;
+
+                if (collisionMatrix[y][x] === 0) { // Nur auf freien Feldern platzieren
+                    let occupied = collectibles.some(item => item.x === x * tileSize && item.y === y * tileSize) ||
+                                   badKeyframes.some(item => item.x === x * tileSize && item.y === y * tileSize) ||
+                                   palms.some(palm => palm.x === x * tileSize && palm.y === y * tileSize) ||
+                                   palms2.some(palm2 => palm2.x === x * tileSize && palm2.y === y * tileSize) ||
+                                   (player.x === x * tileSize && player.y === y * tileSize); // Verhindert Platzierung auf dem Spielerfeld
+                    if (!occupied) {
+                        const badElement = document.createElement('img');
+
+                        badElement.src = "images/bad_keyframes_1.gif"; // GIF für Bad-Keyframe
+
+                        badElement.classList.add('badKeyframe');
+                        gameContainer.appendChild(badElement);
+
+                        badKeyframes.push({ x: x * tileSize, y: y * tileSize, element: badElement });
+
+                        setTimeout(() => {
+                            if (!player.collectedBadKeyframes.includes(badElement)) {
+                                if (badElement.parentElement === gameContainer) {
+                                    gameContainer.removeChild(badElement);
+                                }
+                                badKeyframes = badKeyframes.filter(item => item.element !== badElement);
+                                spawnBadKeyframe(); // Bad-Keyframe erneut spawnen
+                            }
+                        }, 4000); // Zeitdauer von 4000ms statt 2000ms
+
+                        placed = true;
+                    }
+                }
+            } while (!placed && maxTries > 0);
+
+            if (!placed) {
+                console.error("Konnte keine freie Position für Bad-Keyframe finden.");
+            }
+        }
+
+        // Zeichnet den Spieler und Felsen
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Zeichne das Spielfeld (Level)
+            ctx.drawImage(levelImage, 0, 0, canvas.width, canvas.height);
+
+            // Zeichne Felsen
+            rocks.forEach(rock => {
+                ctx.drawImage(rockImage, rock.x, rock.y, tileSize, tileSize);
+            });
+        }
+
+        // Bewegt die Sammelobjekte, Bad-Keyframes und die Spielfigur bei jedem Frame
+        function updatePositions() {
+            // Sammelobjekte aktualisieren
+            collectibles.forEach(item => {
+                item.element.style.left = `${item.x}px`;
+                item.element.style.top = `${item.y}px`;
+            });
+
+            // Bad-Keyframes aktualisieren
+            badKeyframes.forEach(item => {
+                item.element.style.left = `${item.x}px`;
+                item.element.style.top = `${item.y}px`;
+            });
+
+            // Spielfigur aktualisieren
+            playerElement.style.left = `${player.x}px`;
+            playerElement.style.top = `${player.y}px`;
+
+            // Zusätzliche Palmen aktualisieren
+            palms2.forEach(palm2 => {
+                palm2.element.style.left = `${palm2.x}px`;
+                palm2.element.style.top = `${palm2.y}px`;
+            });
+        }
+
+        // Überprüft Kollision basierend auf der verkleinerten Kollisionsbox
+        function checkCollision(x1, y1, x2, y2, size) {
+            const collisionBoxSize = player.width / 2; // Verkleinerte Kollisionsbox
+            const offsetX = (player.width - collisionBoxSize) / 2;
+            const offsetY = (player.height - collisionBoxSize) / 2;
+            return (
+                x1 + offsetX < x2 + size &&
+                x1 + offsetX + collisionBoxSize > x2 &&
+                y1 + offsetY < y2 + size &&
+                y1 + offsetY + collisionBoxSize > y2
+            );
+        }
+
+        // Handhabt die Tasteneingaben und aktualisiert die Geschwindigkeit des Spielers
+        function handleMovement() {
+            if (isDead) return; // Bewegungen deaktivieren, wenn der Spieler tot ist
+
+            player.velocityX = 0;
+            player.velocityY = 0;
+
+            let isMovingFlag = false; // Flag zur Überprüfung, ob der Spieler sich bewegt
+
+            if (keysPressed["ArrowUp"] || keysPressed["w"]) {
+                player.velocityY = -speed;
+                player.direction = "up";
+                isMovingFlag = true;
+            }
+            if (keysPressed["ArrowDown"] || keysPressed["s"]) {
+                player.velocityY = speed;
+                player.direction = "down";
+                isMovingFlag = true;
+            }
+            if (keysPressed["ArrowLeft"] || keysPressed["a"]) {
+                player.velocityX = -speed;
+                player.direction = "left";
+                isMovingFlag = true;
+            }
+            if (keysPressed["ArrowRight"] || keysPressed["d"]) {
+                player.velocityX = speed;
+                player.direction = "right";
+                isMovingFlag = true;
+            }
+
+            // Wenn der Spieler sich nicht bewegt, setze die Idle-Animation
+            if (!isMovingFlag) {
+                player.direction = "idle";
+            }
+
+            // Aktualisiere die CSS-Klasse basierend auf der Richtung
+            setPlayerAnimation(player.direction);
+        }
+
+        // Funktion zum Setzen der Spieleranimation über CSS-Klassen
+        function setPlayerAnimation(direction) {
+            if (direction !== player.previousDirection) {
+                console.log(`Wechsle Animation von ${player.previousDirection} zu ${direction}`);
+                playerElement.classList.remove(player.previousDirection);
+                playerElement.classList.add(direction);
+                player.previousDirection = direction;
+            }
+        }
+
+        // Aktualisiert die Position des Spielers und prüft Kollisionen
+        function updatePlayerPosition() {
+            const nextX = player.x + player.velocityX;
+            const nextY = player.y + player.velocityY;
+
+            // Stelle sicher, dass der Spieler innerhalb der Grenzen bleibt
+            const minX = 0;
+            const minY = 0;
+            const maxX = canvas.width - tileSize;
+            const maxY = canvas.height - tileSize;
+
+            if (nextX < minX || nextX > maxX || nextY < minY || nextY > maxY) {
+                // Kollision mit Spielfeldgrenzen
+                return;
+            }
+
+            // Stelle sicher, dass der Spieler nicht gegen Felsen läuft
+            let collidesWithRock = false;
+            rocks.forEach(rock => {
+                if (checkCollision(nextX, nextY, rock.x, rock.y, tileSize)) {
+                    collidesWithRock = true;
+                }
+            });
+
+            // Nur bewegen, wenn keine Kollision mit Felsen
+            if (!collidesWithRock) {
+                player.x = nextX;
+                player.y = nextY;
+
+                // Setze die Position des Player-Elements
+                playerElement.style.left = `${player.x}px`;
+                playerElement.style.top = `${player.y}px`;
+            }
+
+            // Prüft, ob der Spieler ein Sammelobjekt aufgenommen hat
+            collectibles = collectibles.filter(item => {
+                if (checkCollision(player.x, player.y, item.x, item.y, tileSize)) {
+                    collectSound.play(); // Sammelobjekt-Sound abspielen
+
+                    // Mit 50% Wahrscheinlichkeit eine zufällige g-Sound abspielen
+                    if (Math.random() < 0.5) {
+                        const randomIndex = Math.floor(Math.random() * collectSounds.length);
+                        const selectedCollectSound = collectSounds[randomIndex];
+                        selectedCollectSound.play().catch(error => {
+                            console.error("Collect-Sound konnte nicht abgespielt werden:", error);
+                        });
+                    }
+
+                    gameContainer.removeChild(item.element);
+
+                    score += 1000; // Punkte hinzufügen
+                    updateScoreDisplay();
+                    return false; // Entfernt das eingesammelte Objekt aus dem Array
+                }
+                return true;
+            });
+
+            // Prüft, ob der Spieler ein Bad-Keyframe eingesammelt hat
+            badKeyframes = badKeyframes.filter(item => {
+                if (checkCollision(player.x, player.y, item.x, item.y, tileSize)) {
+                    badSound.play(); // Bad-Keyframe-Sound abspielen
+
+                    // Wenn der Spieler stirbt, handlePlayerDeath() wird aufgerufen und nur die Todes-Sounds werden abgespielt
+                    score -= 4000; // Punkte abziehen (von 5000 auf 4000 geändert)
+                    updateScoreDisplay();
+
+                    if (!isDead) {
+                        // Mit 30% Wahrscheinlichkeit eine zufällige s-Sound abspielen
+                        if (Math.random() < 0.3) {
+                            const randomIndex = Math.floor(Math.random() * sSounds.length);
+                            const selectedSSound = sSounds[randomIndex];
+                            selectedSSound.play().catch(error => {
+                                console.error("s-Sound konnte nicht abgespielt werden:", error);
+                            });
+                        }
+                    }
+
+                    gameContainer.removeChild(item.element);
+
+                    // Füge ein neues Sammelobjekt hinzu, aber KEIN neues Bad-Keyframe
+                    addCollectible();
+
+                    // Markiere das eingesammelte Bad-Keyframe, damit es nicht erneut gespawnt wird
+                    player.collectedBadKeyframes.push(item.element);
+
+                    return false; // Entfernt das eingesammelte Bad-Keyframe aus dem Array
+                }
+                return true;
+            });
+
+            // Prüfen, ob alle Sammelobjekte eingesammelt wurden
+            if (collectibles.length === 0 && !isDead) {
+                currentLevel++; // Level erhöhen
+                updateLevelDisplay(); // Level-Anzeige aktualisieren
+                updateScoreDisplay(); // Falls nötig
+                startNextLevel();
+            }
+        }
+
+        // Startet das nächste Level
+        function startNextLevel() {
+            initRocks(); // Karte neu generieren
+            player.velocityX = 0; // Bewegung des Spielers zurücksetzen
+            player.velocityY = 0;
+
+            initCollectibles(); // Sammelobjekte initialisieren
+            initPalms(); // Palmen initialisieren
+            initPalms2(); // Zusätzliche Palmen initialisieren
+            initBadKeyframes(); // Bad-Keyframes initialisieren
+        }
+
+        // Hauptspiel-Schleife
+        function gameLoop() {
+            handleMovement();
+            updatePlayerPosition();
+            drawGame();
+            updatePositions(); // Aktualisiere die Position der Sammelobjekte, Bad-Keyframes und Spielfigur
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event Listener für Tastendrücke
+        document.addEventListener("keydown", (e) => {
+            keysPressed[e.key] = true;
+            startBackgroundMusic(); // Hintergrundmusik starten
+        });
+
+        // Event Listener für das Loslassen von Tasten
+        document.addEventListener("keyup", (e) => {
+            keysPressed[e.key] = false;
+        });
+
+        // Funktion zum Anzeigen des Splash-Screens und Starten des Spiels
+        function showSplashAndStart() {
+            splashElement.style.display = 'block'; // Splash anzeigen
+
+            // Nach 3 Sekunden, verstecke den Splash
+            setTimeout(() => {
+                splashElement.style.display = 'none'; // Splash verstecken
+            }, 3000); // Dauer des Splash-Screens in Millisekunden
+        }
+
+        // Initialisiert das Spiel (Level, Punkte, Objekte, etc.)
+        function initializeGame() {
+            updateLevelDisplay(); // Initiale Level-Anzeige
+            updateScoreDisplay(); // Initiale Punktanzeige
+            initRocks();
+            initCollectibles();
+            initPalms(); // Palmen initialisieren
+            initPalms2(); // Zusätzliche Palmen initialisieren
+            initBadKeyframes(); // Bad-Keyframes initialisieren
+            gameLoop(); // Startet die Spiel-Schleife
+        }
+
+        // Startet das Spiel mit dem Splash-Screen
+        function startGame() {
+            initializeGame(); // Spiel initialisieren
+            showSplashAndStart(); // Splash anzeigen und verstecken
+        }
+
+        window.onload = startGame;
+    </script>
+</body>
+</html>
